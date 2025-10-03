@@ -1369,24 +1369,30 @@
         const menuBtn = document.getElementById('menuBtn');
         const sidebar = document.getElementById('sidebar');
 
-        menuBtn.addEventListener('click', function() {
-            sidebar.classList.toggle('open');
-            document.body.classList.toggle('sidebar-open');
-        });
+        // Sidebar control - only hamburger button and escape key can close it
+        let sidebarOpen = false;
 
-        // Close on outside click
-        document.addEventListener('click', function(e) {
-            if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+        menuBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (sidebarOpen) {
                 sidebar.classList.remove('open');
                 document.body.classList.remove('sidebar-open');
+                sidebarOpen = false;
+            } else {
+                sidebar.classList.add('open');
+                document.body.classList.add('sidebar-open');
+                sidebarOpen = true;
             }
         });
 
-        // Close on Escape
+        // Close on Escape only
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
+            if (e.key === 'Escape' && sidebarOpen) {
                 sidebar.classList.remove('open');
                 document.body.classList.remove('sidebar-open');
+                sidebarOpen = false;
             }
         });
     </script>
