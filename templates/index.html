@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .url-input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .scrape-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .scrape-btn:hover {
+            background: #0056b3;
+        }
+
+        .scrape-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .panel-actions {
+            padding: 15px 20px;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .extract-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .extract-btn:hover {
+            background: #218838;
+        }
+
+        .extract-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .content-container {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            min-height: 0;
+        }
+
+        .panel {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .panel-header h3 {
+            font-size: 16px;
+            color: #333;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .original-content {
+            white-space: pre-wrap;
+            color: #666;
+        }
+
+        .scraped-content {
+            color: #333;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        .business-params {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+
+        .business-params h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .business-params pre {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin: 0;
+        }
+
+        .params-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .param-item {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .param-item strong {
+            color: #2c5aa0;
+            font-size: 14px;
+        }
+
+        .param-value {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .business-params p {
+            margin: 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .params-summary {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 10px 0;
+            color: #1565c0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .param-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .param-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .relevance-badge {
+            background: #4caf50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .param-item[data-relevance="1"] .relevance-badge { background: #ff9800; }
+        .param-item[data-relevance="2"] .relevance-badge { background: #2196f3; }
+        .param-item[data-relevance="3"] .relevance-badge { background: #4caf50; }
+        .param-item[data-relevance="4"] .relevance-badge,
+        .param-item[data-relevance="5"] .relevance-badge,
+        .param-item[data-relevance="6"] .relevance-badge { background: #8bc34a; }
+        .param-item[data-relevance="7"] .relevance-badge,
+        .param-item[data-relevance="8"] .relevance-badge,
+        .param-item[data-relevance="9"] .relevance-badge { background: #4caf50; }
+
+        .param-description {
+            font-size: 12px;
+            color: #888;
+            font-style: italic;
+            margin-top: 5px;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 5px;
+        }
+
+        .edit-param-btn {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .edit-param-btn:hover {
+            background: #e0e0e0;
+            border-color: #bbb;
+        }
+
+        .param-value.editing {
+            background: #fff9c4;
+            border: 2px solid #4caf50;
+            border-radius: 4px;
+            padding: 4px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .param-value.editing:focus {
+            background: #ffffff;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        .save-notification {
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: #4caf50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            animation: slideInOut 2s ease;
+            z-index: 10;
+        }
+
+        @keyframes slideInOut {
+            0% { opacity: 0; transform: translateY(-10px); }
+            20% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        .param-item {
+            position: relative;
+        }
+
+        .param-value {
+            cursor: text;
+            min-height: 18px;
+        }
+
+        .param-value:hover {
+            background: #f8f8f8;
+        }
+
+        .summary-stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .custom-badge {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-right: 4px;
+        }
+
+        .custom-generated {
+            border-left: 4px solid #4ecdc4;
+            background: linear-gradient(to right, rgba(78, 205, 196, 0.05), transparent);
+        }
+
+        .custom-generated .param-description::after {
+            content: " (AI-generated parameter based on unique content analysis)";
+            color: #4ecdc4;
+            font-weight: 500;
+        }
+
+        .generate-prompt-btn {
+            background: #9c27b0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .generate-prompt-btn:hover {
+            background: #7b1fa2;
+        }
+
+        .generate-prompt-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .logo-prompt-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9ff;
+            border: 2px solid #e3f2fd;
+            border-radius: 8px;
+            border-left: 5px solid #9c27b0;
+        }
+
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .prompt-header h4 {
+            color: #9c27b0;
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .prompt-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .prompt-content {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            min-height: 150px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            cursor: text;
+            white-space: pre-wrap;
+        }
+
+        .prompt-content:focus {
+            outline: 2px solid #9c27b0;
+            border-color: transparent;
+        }
+
+        .prompt-content.editing {
+            background: #fff9f5;
+            border: 2px solid #9c27b0;
+        }
+
+        .prompt-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .edit-prompt-btn, .copy-prompt-btn {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .edit-prompt-btn:hover, .copy-prompt-btn:hover {
+            background: #e8e8e8;
+        }
+
+        .copy-success {
+            color: #4caf50;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>URL Scraper</h1>
+        <div class="url-input-container">
+            <input
+                type="url"
+                id="urlInput"
+                class="url-input"
+                placeholder="Enter URL to scrape (e.g., https://example.com)"
+            >
+            <button id="scrapeBtn" class="scrape-btn">Scrape</button>
+        </div>
+    </div>
+
+    <div class="content-container">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>Scraped Text</h3>
+            </div>
+            <div id="scrapedContent" class="panel-content">
+                <div class="empty-state">Enter a URL and click "Scrape" to see extracted text</div>
+            </div>
+            <div class="panel-actions" id="panelActions" style="display: none;">
+                <button id="extractBusinessBtn" class="extract-btn">Extract Business Parameters</button>
+                <button id="generatePromptBtn" class="generate-prompt-btn" style="display: none;">Generate Logo Prompt</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById('urlInput');
+        const scrapeBtn = document.getElementById('scrapeBtn');
+        const scrapedContent = document.getElementById('scrapedContent');
+        const panelActions = document.getElementById('panelActions');
+        const extractBusinessBtn = document.getElementById('extractBusinessBtn');
+        const generatePromptBtn = document.getElementById('generatePromptBtn');
+        let currentParameters = null;
+
+        async function scrapeUrl() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            scrapeBtn.disabled = true;
+            scrapeBtn.textContent = 'Scraping...';
+
+            scrapedContent.innerHTML = '<div class="loading">Extracting text content...</div>';
+
+            try {
+                const response = await fetch('/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Scraping failed');
+                }
+
+                scrapedContent.innerHTML = `<div class="scraped-content">${escapeHtml(data.scraped_text)}</div>`;
+                panelActions.style.display = 'block';
+                currentUrl = data.url;
+
+            } catch (error) {
+                scrapedContent.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                panelActions.style.display = 'none';
+            } finally {
+                scrapeBtn.disabled = false;
+                scrapeBtn.textContent = 'Scrape';
+            }
+        }
+
+        let currentUrl = '';
+
+        async function extractBusinessParameters() {
+            const scrapedText = scrapedContent.querySelector('.scraped-content');
+            if (!scrapedText) return;
+
+            extractBusinessBtn.disabled = true;
+            extractBusinessBtn.textContent = 'Analyzing for Logo Design...';
+
+            try {
+                const response = await fetch('/extract-business', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: scrapedText.textContent,
+                        url: currentUrl
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Business parameter extraction failed');
+                }
+
+                // Display extracted parameters in a nicely formatted way
+                const businessParams = document.createElement('div');
+                businessParams.className = 'business-params';
+
+                // Count custom-generated vs predefined parameters
+                const customCount = Object.values(data.parameters).filter(p => p.is_custom_generated).length;
+                const predefinedCount = Object.keys(data.parameters).length - customCount;
+
+                let paramsHtml = `
+                    <h4>🎨 AI-Enhanced Brand Analysis for Logo Design</h4>
+                    <p><em>${data.extraction_type} - ${data.purpose}</em></p>
+                    <div class="params-summary">
+                        <div class="summary-stats">
+                            <span class="stat-item">📊 ${Object.keys(data.parameters).length} total parameters</span>
+                            <span class="stat-item">🔍 ${predefinedCount} from 21+ extractors</span>
+                            <span class="stat-item">🤖 ${customCount} AI-generated</span>
+                        </div>
+                    </div>
+                    <div class="params-grid">
+                `;
+
+                // Format each parameter using the new structure
+                const params = data.parameters;
+
+                // Sort parameters by relevance score (highest first)
+                const sortedParams = Object.entries(params).sort((a, b) =>
+                    (b[1].relevance_score || 0) - (a[1].relevance_score || 0)
+                );
+
+                for (const [key, paramData] of sortedParams) {
+                    let formattedValue = '';
+
+                    if (Array.isArray(paramData.value)) {
+                        formattedValue = paramData.value.join(', ');
+                    } else if (typeof paramData.value === 'object') {
+                        // Format contact info and social media nicely
+                        if (paramData.name === 'Contact Information' || paramData.name === 'Social Media Presence') {
+                            formattedValue = Object.entries(paramData.value).map(([k, v]) => `${k}: ${v}`).join('<br>');
+                        } else {
+                            formattedValue = JSON.stringify(paramData.value, null, 2);
+                        }
+                    } else {
+                        formattedValue = paramData.value.toString();
+                    }
+
+                    const isCustomGenerated = paramData.is_custom_generated;
+                    const customClass = isCustomGenerated ? 'custom-generated' : '';
+
+                    paramsHtml += `
+                        <div class="param-item ${customClass}" data-relevance="${paramData.relevance_score}" data-param-key="${key}">
+                            <div class="param-header">
+                                <strong>${paramData.name}</strong>
+                                <div class="param-actions">
+                                    ${isCustomGenerated ? '<span class="custom-badge">AI</span>' : ''}
+                                    <span class="relevance-badge">Relevance: ${paramData.relevance_score}</span>
+                                    <button class="edit-param-btn" title="Edit this parameter">✏️</button>
+                                </div>
+                            </div>
+                            <div class="param-value" contenteditable="false">${formattedValue}</div>
+                            <div class="param-description">${paramData.description}</div>
+                        </div>
+                    `;
+                }
+
+                paramsHtml += '</div>';
+                businessParams.innerHTML = paramsHtml;
+
+                // Remove existing business params if any
+                const existing = scrapedContent.querySelector('.business-params');
+                if (existing) existing.remove();
+
+                scrapedContent.appendChild(businessParams);
+
+                // Store current parameters and show generate prompt button
+                currentParameters = data.parameters;
+                generatePromptBtn.style.display = 'inline-block';
+
+                // Add edit functionality
+                setupEditableParameters(businessParams);
+
+            } catch (error) {
+                alert('Error extracting business parameters: ' + error.message);
+                generatePromptBtn.style.display = 'none';
+            } finally {
+                extractBusinessBtn.disabled = false;
+                extractBusinessBtn.textContent = 'Extract Business Parameters';
+            }
+        }
+
+        async function generateLogoPrompt() {
+            if (!currentParameters) {
+                alert('Please extract business parameters first');
+                return;
+            }
+
+            generatePromptBtn.disabled = true;
+            generatePromptBtn.textContent = 'Generating Prompt...';
+
+            try {
+                const response = await fetch('/generate-logo-prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        parameters: currentParameters
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Logo prompt generation failed');
+                }
+
+                // Display the generated prompt
+                displayLogoPrompt(data);
+
+            } catch (error) {
+                alert('Error generating logo prompt: ' + error.message);
+            } finally {
+                generatePromptBtn.disabled = false;
+                generatePromptBtn.textContent = 'Generate Logo Prompt';
+            }
+        }
+
+        function displayLogoPrompt(data) {
+            // Remove existing prompt section if any
+            const existingPrompt = scrapedContent.querySelector('.logo-prompt-section');
+            if (existingPrompt) existingPrompt.remove();
+
+            // Create prompt section
+            const promptSection = document.createElement('div');
+            promptSection.className = 'logo-prompt-section';
+
+            promptSection.innerHTML = `
+                <div class="prompt-header">
+                    <h4>🎨 Logo Design Prompt</h4>
+                    <div class="prompt-stats">
+                        <span>📝 ${data.word_count} words</span>
+                        <span>📊 Generated from ${data.generated_from} parameters</span>
+                        <span>🔗 ${data.prompt_type}</span>
+                    </div>
+                </div>
+                <div class="prompt-content" contenteditable="false" id="promptContent">${escapeHtml(data.prompt)}</div>
+                <div class="prompt-actions">
+                    <button class="edit-prompt-btn" id="editPromptBtn">✏️ Edit Prompt</button>
+                    <button class="copy-prompt-btn" id="copyPromptBtn">📋 Copy to Clipboard</button>
+                    <span class="copy-success" id="copySuccess" style="display: none;">✓ Copied!</span>
+                </div>
+            `;
+
+            scrapedContent.appendChild(promptSection);
+
+            // Setup edit and copy functionality
+            setupPromptEditing(promptSection);
+        }
+
+        function setupPromptEditing(promptSection) {
+            const promptContent = promptSection.querySelector('#promptContent');
+            const editBtn = promptSection.querySelector('#editPromptBtn');
+            const copyBtn = promptSection.querySelector('#copyPromptBtn');
+            const copySuccess = promptSection.querySelector('#copySuccess');
+
+            // Edit functionality
+            editBtn.addEventListener('click', () => {
+                const isEditing = promptContent.contentEditable === 'true';
+
+                if (isEditing) {
+                    // Save changes
+                    promptContent.contentEditable = 'false';
+                    promptContent.classList.remove('editing');
+                    editBtn.textContent = '✏️ Edit Prompt';
+                    editBtn.title = 'Edit this prompt';
+                } else {
+                    // Start editing
+                    promptContent.contentEditable = 'true';
+                    promptContent.classList.add('editing');
+                    promptContent.focus();
+                    editBtn.textContent = '💾 Save Changes';
+                    editBtn.title = 'Save changes';
+                }
+            });
+
+            // Copy to clipboard functionality
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(promptContent.textContent);
+                    copySuccess.style.display = 'inline';
+                    setTimeout(() => {
+                        copySuccess.style.display = 'none';
+                    }, 2000);
+                } catch (err) {
+                    // Fallback for browsers that don't support clipboard API
+                    const textArea = document.createElement('textarea');
+                    textArea.value = promptContent.textContent;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+
+                    copySuccess.style.display = 'inline';
+                    setTimeout(() => {
+                        copySuccess.style.display = 'none';
+                    }, 2000);
+                }
+            });
+
+            // Handle keyboard shortcuts
+            promptContent.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    editBtn.click(); // Trigger save
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    if (promptContent.contentEditable === 'true') {
+                        editBtn.click(); // Trigger save/cancel
+                    }
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function setupEditableParameters(container) {
+            const editButtons = container.querySelectorAll('.edit-param-btn');
+
+            editButtons.forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const paramItem = button.closest('.param-item');
+                    const paramValue = paramItem.querySelector('.param-value');
+                    const isEditing = paramValue.contentEditable === 'true';
+
+                    if (isEditing) {
+                        // Save changes
+                        paramValue.contentEditable = 'false';
+                        paramValue.classList.remove('editing');
+                        button.textContent = '✏️';
+                        button.title = 'Edit this parameter';
+
+                        // Optional: Show save confirmation
+                        showSaveNotification(paramItem);
+                    } else {
+                        // Start editing
+                        paramValue.contentEditable = 'true';
+                        paramValue.classList.add('editing');
+                        paramValue.focus();
+                        button.textContent = '💾';
+                        button.title = 'Save changes';
+
+                        // Select text if it's a simple value
+                        if (paramValue.textContent.length < 100) {
+                            selectAllText(paramValue);
+                        }
+                    }
+                });
+            });
+
+            // Handle Enter key to save, Escape to cancel
+            container.addEventListener('keydown', (e) => {
+                if (e.target.classList.contains('param-value') && e.target.contentEditable === 'true') {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        const editBtn = e.target.parentNode.querySelector('.edit-param-btn');
+                        editBtn.click(); // Trigger save
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        // Cancel editing - restore original value
+                        const editBtn = e.target.parentNode.querySelector('.edit-param-btn');
+                        e.target.contentEditable = 'false';
+                        e.target.classList.remove('editing');
+                        editBtn.textContent = '✏️';
+                        editBtn.title = 'Edit this parameter';
+                        // You could restore original value here if needed
+                    }
+                }
+            });
+
+            // Handle clicking outside to save
+            document.addEventListener('click', (e) => {
+                const editingElements = container.querySelectorAll('.param-value.editing');
+                editingElements.forEach(element => {
+                    if (!element.contains(e.target) && !e.target.classList.contains('edit-param-btn')) {
+                        const editBtn = element.parentNode.querySelector('.edit-param-btn');
+                        if (editBtn.textContent === '💾') {
+                            editBtn.click(); // Auto-save when clicking outside
+                        }
+                    }
+                });
+            });
+        }
+
+        function selectAllText(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        function showSaveNotification(paramItem) {
+            const notification = document.createElement('div');
+            notification.className = 'save-notification';
+            notification.textContent = '✓ Saved';
+            paramItem.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 2000);
+        }
+
+        scrapeBtn.addEventListener('click', scrapeUrl);
+        extractBusinessBtn.addEventListener('click', extractBusinessParameters);
+        generatePromptBtn.addEventListener('click', generateLogoPrompt);
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                scrapeUrl();
+            }
+        });
+    </script>
+</body>
+</html>

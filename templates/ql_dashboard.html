@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-Learning Training Dashboard</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fafafa;
+            color: #2c3e50;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
+            padding: 12px;
+            min-height: 100vh;
+        }
+
+        .panel {
+            background: #fff;
+            border-radius: 6px;
+            padding: 16px;
+            border: 1px solid #e1e8ed;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .panel h3 {
+            color: #1a202c;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #e1e8ed;
+            padding-bottom: 6px;
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: #f8fafc;
+            text-align: center;
+            padding: 12px 16px;
+            border-radius: 6px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            font-size: 1.4em;
+            margin: 0 0 4px 0;
+            color: #1e293b;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .header p {
+            color: #64748b;
+            font-size: 0.85em;
+            font-weight: 400;
+            margin: 0;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            color: #374151;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .control-group small {
+            color: #6b7280;
+            font-size: 0.8em;
+            margin-bottom: 8px;
+            display: block;
+            line-height: 1.3;
+        }
+
+        .control-group input {
+            background: #fff;
+            border: 1px solid #d1d5db;
+            color: #374151;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: #667eea;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn:disabled {
+            background: #e5e7eb;
+            color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.danger {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        .btn.danger:hover {
+            background: #dc2626;
+            color: #fff;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .stat-item {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-value {
+            font-size: 1.75em;
+            font-weight: 700;
+            color: #1e293b;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #64748b;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            background: #f1f5f9;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            height: 100%;
+            width: 0%;
+            transition: width 0.6s ease-out;
+        }
+
+        .chart-container {
+            height: 400px;
+            position: relative;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        .board-cell {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            width: 75px;
+            height: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        .board-cell.x {
+            color: #16a34a;
+        }
+
+        .board-cell.o {
+            color: #dc2626;
+        }
+
+        .board-cell.clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .board-cell.clickable:hover {
+            background: #e2e8f0;
+            transform: scale(1.05);
+        }
+
+        .board-cell.disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .q-table-grid {
+            max-height: 250px;
+            overflow-y: auto;
+            background: #f8fafc;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .q-entry {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .q-entry:last-child {
+            border-bottom: none;
+        }
+
+        .q-state {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 0.85em;
+            color: #475569;
+        }
+
+        .q-value {
+            background: #16a34a;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.8em;
+        }
+
+        .q-value.negative {
+            background: #dc2626;
+        }
+
+        .move-history {
+            max-height: 375px;
+            overflow-y: auto;
+        }
+
+        .move-item {
+            background: #f8fafc;
+            margin: 6px 0;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #16a34a;
+            border: 1px solid #e2e8f0;
+        }
+
+        .move-item.player-o {
+            border-left-color: #dc2626;
+        }
+
+        .training-log {
+            background: #f8fafc;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+            font-size: 0.8em;
+            border: 1px solid #e2e8f0;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            color: #475569;
+            line-height: 1.3;
+        }
+
+        .log-entry.info {
+            color: #16a34a;
+        }
+
+        .log-entry.warning {
+            color: #ea580c;
+        }
+
+        .log-entry.error {
+            color: #dc2626;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .two-thirds {
+            grid-column: span 2;
+        }
+
+        .half-width {
+            grid-column: span 1;
+        }
+
+        .quarter-width {
+            grid-column: span 1;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .epsilon-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .epsilon-high {
+            background: #f44336;
+        }
+
+        .epsilon-medium {
+            background: #ff9800;
+        }
+
+        .epsilon-low {
+            background: #4CAF50;
+        }
+
+        /* Simple Educational Sidebar */
+        .menu-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #3b82f6;
+            border: none;
+            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .menu-btn span {
+            width: 18px;
+            height: 2px;
+            background: white;
+            border-radius: 1px;
+            transition: 0.3s;
+        }
+
+        .menu-btn:hover {
+            background: #2563eb;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100vh;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            transition: left 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            left: 0;
+        }
+
+        body {
+            transition: margin-left 0.3s ease;
+        }
+
+        body.sidebar-open {
+            margin-left: 300px;
+        }
+
+        .sidebar-header {
+            padding: 27px 30px 20px 80px;
+            background: #3b82f6;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+
+        .sidebar-content {
+            padding: 20px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 25px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 20px;
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .sidebar-section h3 {
+            color: #1a202c;
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 5px;
+        }
+
+        .sidebar-section h4 {
+            color: #2d3748;
+            margin: 15px 0 8px 0;
+            font-size: 1em;
+            font-weight: 600;
+        }
+
+        .sidebar-section p {
+            margin: 8px 0;
+            line-height: 1.5;
+            color: #4a5568;
+        }
+
+        .sidebar-section ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .sidebar-section li {
+            margin: 5px 0;
+            color: #4a5568;
+        }
+
+        .glossary-term {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .formula {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        .highlight-box {
+            background: #ebf8ff;
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 0 4px 4px 0;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1>Q-Learning Training Dashboard</h1>
+            <p>Real-time visualization of Tic-Tac-Toe Q-Learning internals</p>
+        </div>
+
+        <!-- Training Controls -->
+        <div class="panel">
+            <h3>Training Controls</h3>
+            <div class="controls">
+                <div class="control-group">
+                    <label>Episodes</label>
+                    <small>Total training games to play (1-100,000)</small>
+                    <input type="number" id="episodes" value="10000" min="1" max="100000">
+                </div>
+                <div class="control-group">
+                    <label>Learning Rate</label>
+                    <small>How fast agents learn from experience (0.01-1.0)</small>
+                    <input type="number" id="learning_rate" value="0.1" step="0.01" min="0.01" max="1.0">
+                </div>
+                <div class="control-group">
+                    <label>Discount Factor</label>
+                    <small>How much agents value future rewards (0.1-1.0)</small>
+                    <input type="number" id="discount_factor" value="0.95" step="0.01" min="0.1" max="1.0">
+                </div>
+                <div class="control-group">
+                    <label>Epsilon Start</label>
+                    <small>Initial exploration rate - high means random moves (0.1-1.0)</small>
+                    <input type="number" id="epsilon_start" value="1.0" step="0.1" min="0.1" max="1.0">
+                </div>
+                <div class="control-group">
+                    <label>Epsilon Decay</label>
+                    <small>How fast exploration decreases over time (0.99-0.9999)</small>
+                    <input type="number" id="epsilon_decay" value="0.9995" step="0.0001" min="0.99" max="0.9999">
+                </div>
+                <div class="control-group">
+                    <label>Epsilon Min</label>
+                    <small>Minimum exploration rate - always some randomness (0.001-0.1)</small>
+                    <input type="number" id="epsilon_min" value="0.01" step="0.01" min="0.001" max="0.1">
+                </div>
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button id="start-training" class="btn">Start Training</button>
+                <button id="stop-training" class="btn danger" disabled>Stop Training</button>
+                <button id="update-params" class="btn">Update Parameters</button>
+            </div>
+        </div>
+
+        <!-- Training Progress -->
+        <div class="panel">
+            <h3>Training Progress</h3>
+            <div id="training-progress">
+                <div class="stat-item">
+                    <div class="stat-value" id="episode-count">0</div>
+                    <div class="stat-label">Episode</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="episode-progress"></div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="training-speed">0.0</div>
+                        <div class="stat-label">Episodes/sec</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-games">0</div>
+                        <div class="stat-label">Total Games</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent Statistics -->
+        <div class="panel">
+            <h3>Agent Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="x-wins">0</div>
+                    <div class="stat-label">X Wins</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="o-wins">0</div>
+                    <div class="stat-label">O Wins</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="draws">0</div>
+                    <div class="stat-label">Draws</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="win-ratio">0.0</div>
+                    <div class="stat-label">X Win Rate</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <div>
+                    <span class="epsilon-indicator" id="x-epsilon-indicator"></span>
+                    Player X Epsilon: <span id="x-epsilon">1.0</span>
+                </div>
+                <div style="margin-top: 5px;">
+                    <span class="epsilon-indicator" id="o-epsilon-indicator"></span>
+                    Player O Epsilon: <span id="o-epsilon">1.0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Win Rate Chart -->
+        <div class="panel two-thirds">
+            <h3>Training Charts</h3>
+            <div class="chart-container">
+                <canvas id="training-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Human vs AI Game -->
+        <div class="panel">
+            <h3>Human vs AI Game</h3>
+            <div style="text-align: center; margin-bottom: 16px;">
+                <button id="start-human-game" class="btn" style="margin-bottom: 12px;">Start New Game</button>
+                <div id="ai-status" style="margin-bottom: 8px; font-size: 0.8em; color: #64748b;">AI Status: Not trained</div>
+                <div id="game-status" style="margin-bottom: 12px; font-weight: 600; color: #1e293b;">Train agents first to play!</div>
+            </div>
+            <div class="game-board" id="human-game-board">
+                <div class="board-cell" data-pos="0"></div>
+                <div class="board-cell" data-pos="1"></div>
+                <div class="board-cell" data-pos="2"></div>
+                <div class="board-cell" data-pos="3"></div>
+                <div class="board-cell" data-pos="4"></div>
+                <div class="board-cell" data-pos="5"></div>
+                <div class="board-cell" data-pos="6"></div>
+                <div class="board-cell" data-pos="7"></div>
+                <div class="board-cell" data-pos="8"></div>
+            </div>
+            <div id="game-score" style="margin-top: 16px; text-align: center; font-size: 0.9em; color: #64748b;">
+                Human: <span id="human-wins">0</span> | AI: <span id="ai-wins">0</span> | Draws: <span id="draw-count">0</span>
+            </div>
+        </div>
+
+        <!-- Q-Table Debug -->
+        <div class="panel">
+            <h3>Q-Table Debug</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="x-qtable-size">0</div>
+                    <div class="stat-label">X States</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="o-qtable-size">0</div>
+                    <div class="stat-label">O States</div>
+                </div>
+            </div>
+            <div class="q-table-grid" id="q-table-sample">
+                <div style="padding: 20px; text-align: center; color: #666;">
+                    Start training to see Q-values...
+                </div>
+            </div>
+        </div>
+
+        <!-- Move History -->
+        <div class="panel">
+            <h3>Recent Moves</h3>
+            <div class="move-history" id="move-history">
+                <div style="padding: 20px; text-align: center; color: #666;">
+                    No moves yet...
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Log -->
+        <div class="panel full-width">
+            <h3>Training Log</h3>
+            <div class="training-log" id="training-log">
+                <div class="log-entry info">Q-Learning Dashboard initialized</div>
+                <div class="log-entry">Ready to start training...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Socket.IO connection
+        const socket = io();
+
+        // Training state
+        let trainingActive = false;
+        let totalEpisodes = 10000;
+
+        // Chart setup
+        const ctx = document.getElementById('training-chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'X Win Rate',
+                    data: [],
+                    borderColor: '#4CAF50',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'O Win Rate',
+                    data: [],
+                    borderColor: '#f44336',
+                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Draw Rate',
+                    data: [],
+                    borderColor: '#ff9800',
+                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: '#334155',
+                            font: {
+                                family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial',
+                                size: 12,
+                                weight: '500'
+                            },
+                            padding: 20,
+                            usePointStyle: true,
+                            pointStyle: 'line'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Training Episodes',
+                            color: '#475569',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        },
+                        ticks: {
+                            color: '#64748b'
+                        },
+                        grid: {
+                            color: '#e2e8f0'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Win Rate',
+                            color: '#475569',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        },
+                        ticks: {
+                            color: '#64748b'
+                        },
+                        grid: {
+                            color: '#e2e8f0'
+                        },
+                        min: 0,
+                        max: 1
+                    }
+                }
+            }
+        });
+
+        // Event listeners
+        document.getElementById('start-training').addEventListener('click', startTraining);
+        document.getElementById('stop-training').addEventListener('click', stopTraining);
+        document.getElementById('update-params').addEventListener('click', updateParameters);
+        document.getElementById('start-human-game').addEventListener('click', startHumanGame);
+
+        // Game state
+        let humanGameActive = false;
+        let humanGameScore = { human: 0, ai: 0, draws: 0 };
+
+        // Socket events
+        socket.on('connect', () => {
+            addLogEntry('Connected to training server', 'info');
+        });
+
+        socket.on('training_started', (data) => {
+            trainingActive = true;
+            totalEpisodes = data.total_episodes;
+            document.getElementById('start-training').disabled = true;
+            document.getElementById('stop-training').disabled = false;
+            addLogEntry(`Training started: ${totalEpisodes} episodes`, 'info');
+        });
+
+        socket.on('training_update', (data) => {
+            updateTrainingStats(data);
+        });
+
+        socket.on('training_completed', (data) => {
+            trainingActive = false;
+            document.getElementById('start-training').disabled = false;
+            document.getElementById('stop-training').disabled = true;
+            addLogEntry(`Training completed in ${data.total_time.toFixed(2)}s`, 'info');
+        });
+
+        socket.on('q_table_sample', (data) => {
+            updateQTableSample(data);
+        });
+
+        socket.on('human_game_started', (data) => {
+            humanGameActive = true;
+            updateHumanGameBoard(data);
+            updateGameStatus(data);
+            addLogEntry('Human vs AI game started', 'info');
+        });
+
+        socket.on('human_game_update', (data) => {
+            updateHumanGameBoard(data);
+            updateGameStatus(data);
+            if (data.game_over) {
+                humanGameActive = false;
+                updateHumanScore(data.winner);
+                if (data.ai_move !== undefined) {
+                    addLogEntry(`AI played position ${data.ai_move}`, 'info');
+                }
+            } else if (data.ai_move !== undefined) {
+                addLogEntry(`AI played position ${data.ai_move}`, 'info');
+            }
+        });
+
+        // Functions
+        function startTraining() {
+            const params = {
+                episodes_total: parseInt(document.getElementById('episodes').value),
+                learning_rate: parseFloat(document.getElementById('learning_rate').value),
+                discount_factor: parseFloat(document.getElementById('discount_factor').value),
+                epsilon_start: parseFloat(document.getElementById('epsilon_start').value),
+                epsilon_decay: parseFloat(document.getElementById('epsilon_decay').value),
+                epsilon_min: parseFloat(document.getElementById('epsilon_min').value)
+            };
+
+            fetch('/api/start_training', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(params)
+            });
+        }
+
+        function stopTraining() {
+            fetch('/api/stop_training', {
+                method: 'POST'
+            });
+        }
+
+        function updateParameters() {
+            const params = {
+                learning_rate: parseFloat(document.getElementById('learning_rate').value),
+                discount_factor: parseFloat(document.getElementById('discount_factor').value),
+                epsilon_decay: parseFloat(document.getElementById('epsilon_decay').value),
+                epsilon_min: parseFloat(document.getElementById('epsilon_min').value)
+            };
+
+            fetch('/api/update_params', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(params)
+            }).then(response => response.json())
+              .then(data => {
+                  addLogEntry('Parameters updated', 'info');
+              });
+        }
+
+        function updateTrainingStats(data) {
+            // Update progress
+            document.getElementById('episode-count').textContent = data.episode;
+            document.getElementById('training-speed').textContent = data.training_speed.toFixed(1);
+            document.getElementById('total-games').textContent = data.episode;
+
+            const progress = (data.episode / totalEpisodes) * 100;
+            document.getElementById('episode-progress').style.width = progress + '%';
+
+            // Update agent stats
+            document.getElementById('x-wins').textContent = data.x_wins;
+            document.getElementById('o-wins').textContent = data.o_wins;
+            document.getElementById('draws').textContent = data.draws;
+            document.getElementById('win-ratio').textContent = data.x_win_rate.toFixed(3);
+
+            // Update epsilon indicators
+            updateEpsilonIndicator('x-epsilon', 'x-epsilon-indicator', data.x_epsilon);
+            updateEpsilonIndicator('o-epsilon', 'o-epsilon-indicator', data.o_epsilon);
+
+            // Update Q-table sizes
+            document.getElementById('x-qtable-size').textContent = data.x_q_table_size;
+            document.getElementById('o-qtable-size').textContent = data.o_q_table_size;
+
+            // Update AI status for human vs AI game
+            const totalStates = data.x_q_table_size + data.o_q_table_size;
+            const aiStatusEl = document.getElementById('ai-status');
+            const gameStatusEl = document.getElementById('game-status');
+
+            if (totalStates > 200) {
+                aiStatusEl.textContent = `AI Status: Well trained (${totalStates} states learned)`;
+                aiStatusEl.style.color = '#16a34a';
+                gameStatusEl.textContent = 'Ready to play!';
+                gameStatusEl.style.color = '#1e293b';
+            } else if (totalStates > 50) {
+                aiStatusEl.textContent = `AI Status: Learning (${totalStates} states learned)`;
+                aiStatusEl.style.color = '#ea580c';
+                gameStatusEl.textContent = 'Keep training for better AI performance';
+                gameStatusEl.style.color = '#ea580c';
+            } else {
+                aiStatusEl.textContent = `AI Status: Not trained (${totalStates} states learned)`;
+                aiStatusEl.style.color = '#dc2626';
+                gameStatusEl.textContent = 'Train agents first to play!';
+                gameStatusEl.style.color = '#dc2626';
+            }
+
+            // Update game board
+            updateGameBoard(data.current_game_board);
+
+            // Update move history
+            updateMoveHistory(data.last_moves);
+
+            // Update chart in real-time without moving/scrolling
+            chart.data.labels.push(data.episode);
+            chart.data.datasets[0].data.push(data.x_win_rate);
+            chart.data.datasets[1].data.push(data.o_win_rate);
+            chart.data.datasets[2].data.push(data.draw_rate);
+
+            // Don't remove old data - let it accumulate and scale to fit
+            // Chart will automatically scale X-axis to show all data points
+
+            // Update chart with smooth animation
+            chart.update('none');
+        }
+
+        function updateEpsilonIndicator(textId, indicatorId, epsilon) {
+            document.getElementById(textId).textContent = epsilon.toFixed(4);
+            const indicator = document.getElementById(indicatorId);
+            indicator.className = 'epsilon-indicator ';
+
+            if (epsilon > 0.5) {
+                indicator.className += 'epsilon-high';
+            } else if (epsilon > 0.1) {
+                indicator.className += 'epsilon-medium';
+            } else {
+                indicator.className += 'epsilon-low';
+            }
+        }
+
+        function updateGameBoard(board) {
+            const cells = document.querySelectorAll('.board-cell');
+            cells.forEach((cell, index) => {
+                cell.textContent = board[index] || '';
+                cell.className = 'board-cell';
+                if (board[index] === 'X') {
+                    cell.className += ' x';
+                } else if (board[index] === 'O') {
+                    cell.className += ' o';
+                }
+            });
+        }
+
+        function updateMoveHistory(moves) {
+            const container = document.getElementById('move-history');
+            if (!moves || moves.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No moves yet...</div>';
+                return;
+            }
+
+            container.innerHTML = moves.slice(-10).map(move => `
+                <div class="move-item ${move.player === 'O' ? 'player-o' : ''}">
+                    <strong>Player ${move.player}</strong> → Position ${move.action}
+                </div>
+            `).join('');
+        }
+
+        function updateQTableSample(data) {
+            const container = document.getElementById('q-table-sample');
+            let html = '';
+
+            if (data.agent_x && data.agent_x.length > 0) {
+                html += '<div style="color: #4CAF50; font-weight: bold; padding: 10px;">Player X Top Q-Values:</div>';
+                data.agent_x.slice(0, 5).forEach(entry => {
+                    html += `
+                        <div class="q-entry">
+                            <div class="q-state">State: ${entry.state} | Action: ${entry.best_action}</div>
+                            <div class="q-value ${entry.best_q < 0 ? 'negative' : ''}">${entry.best_q.toFixed(3)}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            if (data.agent_o && data.agent_o.length > 0) {
+                html += '<div style="color: #f44336; font-weight: bold; padding: 10px;">Player O Top Q-Values:</div>';
+                data.agent_o.slice(0, 5).forEach(entry => {
+                    html += `
+                        <div class="q-entry">
+                            <div class="q-state">State: ${entry.state} | Action: ${entry.best_action}</div>
+                            <div class="q-value ${entry.best_q < 0 ? 'negative' : ''}">${entry.best_q.toFixed(3)}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML = html || '<div style="padding: 20px; text-align: center; color: #666;">Start training to see Q-values...</div>';
+        }
+
+        function addLogEntry(message, type = '') {
+            const log = document.getElementById('training-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+
+            // Keep only last 100 entries
+            while (log.children.length > 100) {
+                log.removeChild(log.firstChild);
+            }
+        }
+
+        // Human vs AI Game Functions
+        function startHumanGame() {
+            fetch('/api/start_human_game', {
+                method: 'POST'
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'error') {
+                      addLogEntry(data.message, 'error');
+                  }
+              });
+        }
+
+        function makeHumanMove(position) {
+            if (!humanGameActive) return;
+
+            fetch('/api/make_human_move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ position: position })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'error') {
+                      addLogEntry(data.message, 'error');
+                  }
+              });
+        }
+
+        function updateHumanGameBoard(gameState) {
+            const cells = document.querySelectorAll('#human-game-board .board-cell');
+            cells.forEach((cell, index) => {
+                cell.textContent = gameState.board[index] || '';
+                cell.className = 'board-cell';
+
+                if (gameState.board[index] === 'X') {
+                    cell.className += ' x';
+                } else if (gameState.board[index] === 'O') {
+                    cell.className += ' o';
+                }
+
+                // Add click functionality for empty cells
+                if (!gameState.board[index] && gameState.current_player === 'human' && !gameState.game_over) {
+                    cell.className += ' clickable';
+                    cell.onclick = () => makeHumanMove(index);
+                } else {
+                    cell.onclick = null;
+                    if (gameState.game_over || gameState.current_player !== 'human') {
+                        cell.className += ' disabled';
+                    }
+                }
+            });
+        }
+
+        function updateGameStatus(gameState) {
+            const statusEl = document.getElementById('game-status');
+
+            if (gameState.game_over) {
+                if (gameState.winner === 'human') {
+                    statusEl.textContent = 'You won! 🎉';
+                    statusEl.style.color = '#16a34a';
+                } else if (gameState.winner === 'ai') {
+                    statusEl.textContent = 'AI won! 🤖';
+                    statusEl.style.color = '#dc2626';
+                } else {
+                    statusEl.textContent = "It's a draw! 🤝";
+                    statusEl.style.color = '#ea580c';
+                }
+            } else if (gameState.current_player === 'human') {
+                statusEl.textContent = 'Your turn (X)';
+                statusEl.style.color = '#1e293b';
+            } else {
+                statusEl.textContent = 'AI thinking...';
+                statusEl.style.color = '#64748b';
+            }
+        }
+
+        function updateHumanScore(winner) {
+            if (winner === 'human') {
+                humanGameScore.human++;
+            } else if (winner === 'ai') {
+                humanGameScore.ai++;
+            } else {
+                humanGameScore.draws++;
+            }
+
+            document.getElementById('human-wins').textContent = humanGameScore.human;
+            document.getElementById('ai-wins').textContent = humanGameScore.ai;
+            document.getElementById('draw-count').textContent = humanGameScore.draws;
+        }
+
+        // Initialize
+        addLogEntry('Dashboard loaded and ready');
+    </script>
+
+    <!-- Simple Menu Button -->
+    <button class="menu-btn" id="menuBtn">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <!-- Simple Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Q-Learning Guide</h2>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3>What is Reinforcement Learning?</h3>
+                <p>Reinforcement Learning (RL) is a machine learning approach where agents learn to make decisions by interacting with an environment and receiving rewards or penalties.</p>
+
+                <div class="highlight-box">
+                    <p><strong>Key Idea:</strong> Learn through trial and error, similar to how humans learn new skills.</p>
+                </div>
+
+                <h4>Core Components:</h4>
+                <ul>
+                    <li><strong>Agent:</strong> The learner/decision maker</li>
+                    <li><strong>Environment:</strong> The world the agent interacts with</li>
+                    <li><strong>State:</strong> Current situation of the environment</li>
+                    <li><strong>Action:</strong> What the agent can do</li>
+                    <li><strong>Reward:</strong> Feedback for taking actions</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Q-Learning Algorithm</h3>
+                <p>Q-Learning is a model-free RL algorithm that learns the quality of actions, telling an agent what action to take under what circumstances.</p>
+
+                <div class="formula">
+                    Q(s,a) = Q(s,a) + α[r + γ·max(Q(s',a')) - Q(s,a)]
+                </div>
+
+                <h4>Where:</h4>
+                <ul>
+                    <li><strong>Q(s,a):</strong> Quality of action 'a' in state 's'</li>
+                    <li><strong>α (alpha):</strong> Learning rate (0-1)</li>
+                    <li><strong>r:</strong> Immediate reward</li>
+                    <li><strong>γ (gamma):</strong> Discount factor (0-1)</li>
+                    <li><strong>s':</strong> Next state</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>This Tic-Tac-Toe Implementation</h3>
+                <p>In this application, we train two Q-learning agents to play tic-tac-toe against each other (self-play).</p>
+
+                <h4>Environment Setup:</h4>
+                <ul>
+                    <li><strong>State:</strong> 9-position board (empty=0, X=1, O=2)</li>
+                    <li><strong>Actions:</strong> Place piece in positions 0-8</li>
+                    <li><strong>Rewards:</strong> Win=+1, Loss=-1, Draw=0</li>
+                    <li><strong>Episodes:</strong> Complete games from start to finish</li>
+                </ul>
+
+                <div class="highlight-box">
+                    <p><strong>Why Tic-Tac-Toe?</strong> Simple rules, finite states (~5,000), fast learning, clear optimal strategy.</p>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Key Parameters</h3>
+
+                <h4>Learning Rate (α)</h4>
+                <p>Controls how fast the agent updates its knowledge. Higher = faster learning but less stable.</p>
+
+                <h4>Discount Factor (γ)</h4>
+                <p>How much the agent values future rewards vs immediate ones.</p>
+
+                <h4>Epsilon (ε)</h4>
+                <p>Exploration rate. Higher = more random moves (exploration). Lower = more optimal moves (exploitation).</p>
+
+                <h4>Episodes</h4>
+                <p>Number of complete games to train on. More episodes = better learning.</p>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Glossary of Terms</h3>
+
+                <p><span class="glossary-term">Agent:</span> The AI player learning to play tic-tac-toe</p>
+
+                <p><span class="glossary-term">Episode:</span> One complete game from start to finish</p>
+
+                <p><span class="glossary-term">Epsilon-Greedy:</span> Strategy balancing exploration (random moves) and exploitation (best known moves)</p>
+
+                <p><span class="glossary-term">Q-Table:</span> Data structure storing quality values for state-action pairs</p>
+
+                <p><span class="glossary-term">Self-Play:</span> Training method where two agents play against each other</p>
+
+                <p><span class="glossary-term">State Space:</span> All possible board configurations (~5,000 for tic-tac-toe)</p>
+
+                <p><span class="glossary-term">Temporal Difference:</span> Learning method that updates estimates based on other estimates</p>
+
+                <p><span class="glossary-term">Exploration vs Exploitation:</span> Trade-off between trying new actions vs using known good actions</p>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Training Process</h3>
+                <p>Watch the dashboard to see how agents improve:</p>
+
+                <ul>
+                    <li><strong>Early episodes:</strong> Random play, ~33% win rate each</li>
+                    <li><strong>Mid-training:</strong> Learning patterns, improving win rates</li>
+                    <li><strong>Late training:</strong> Near-optimal play, stable win rates</li>
+                </ul>
+
+                <div class="highlight-box">
+                    <p><strong>Good Signs:</strong> Win rates stabilizing around 40-45% each with 10-20% draws indicates strong play.</p>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Exploration Strategies</h3>
+
+                <h4>Epsilon-Greedy (Used Here)</h4>
+                <p>Most common approach: take random action with probability ε, best known action otherwise.</p>
+
+                <h4>Alternative Strategies:</h4>
+                <ul>
+                    <li><strong>UCB (Upper Confidence Bound):</strong> Balance exploitation and exploration based on uncertainty</li>
+                    <li><strong>Boltzmann Exploration:</strong> Probability-weighted action selection</li>
+                    <li><strong>Optimistic Initialization:</strong> Start with high Q-values to encourage exploration</li>
+                </ul>
+
+                <div class="highlight-box">
+                    <p><strong>Trade-off:</strong> High ε = more exploration, slower convergence. Low ε = faster convergence, potential local optima.</p>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Understanding Convergence</h3>
+                <p>Signs that your agents are learning effectively:</p>
+
+                <h4>Early Training (0-1000 episodes):</h4>
+                <ul>
+                    <li>High epsilon (>0.5), random-looking play</li>
+                    <li>Win rates around 33% each, high draws</li>
+                    <li>Q-table growing rapidly</li>
+                </ul>
+
+                <h4>Mid Training (1000-5000 episodes):</h4>
+                <ul>
+                    <li>Epsilon decreasing, more strategic play</li>
+                    <li>Win rates becoming asymmetric</li>
+                    <li>Learning basic tactics (blocking, winning)</li>
+                </ul>
+
+                <h4>Converged (5000+ episodes):</h4>
+                <ul>
+                    <li>Low epsilon (<0.1), mostly optimal play</li>
+                    <li>Stable win rates (40-45% each)</li>
+                    <li>Q-table size plateaus</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Practical Tips</h3>
+
+                <h4>Hyperparameter Guidelines:</h4>
+                <ul>
+                    <li><strong>Learning Rate:</strong> 0.1-0.3 for stable learning</li>
+                    <li><strong>Discount Factor:</strong> 0.9-0.99 for strategic games</li>
+                    <li><strong>Epsilon Decay:</strong> 0.995-0.9999 for gradual transition</li>
+                    <li><strong>Episodes:</strong> 1000+ for basic play, 10000+ for strong play</li>
+                </ul>
+
+                <h4>Troubleshooting:</h4>
+                <ul>
+                    <li><strong>Not learning:</strong> Increase learning rate or episodes</li>
+                    <li><strong>Unstable:</strong> Decrease learning rate</li>
+                    <li><strong>Too greedy:</strong> Increase epsilon or decay slower</li>
+                    <li><strong>Slow progress:</strong> Check reward structure</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Advanced Concepts</h3>
+
+                <h4>Why Self-Play Works:</h4>
+                <p>Both agents improve simultaneously, creating increasingly challenging opponents. This leads to robust strategies.</p>
+
+                <h4>Q-Learning vs Other Methods:</h4>
+                <ul>
+                    <li><strong>vs Policy Gradient:</strong> Q-learning learns values, PG learns policy directly</li>
+                    <li><strong>vs Monte Carlo:</strong> Q-learning updates during episodes, MC waits for completion</li>
+                    <li><strong>vs Deep Q-Networks:</strong> Tabular Q-learning stores exact values, DQN uses neural approximation</li>
+                </ul>
+
+                <div class="highlight-box">
+                    <p><strong>Fun Fact:</strong> Optimal tic-tac-toe play results in draws when both players play perfectly!</p>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Real-World Applications</h3>
+                <p>Q-Learning and RL are used in many domains:</p>
+
+                <ul>
+                    <li><strong>Game AI:</strong> Chess, Go, StarCraft, Dota 2</li>
+                    <li><strong>Robotics:</strong> Walking, grasping, navigation</li>
+                    <li><strong>Autonomous Vehicles:</strong> Path planning, decision making</li>
+                    <li><strong>Finance:</strong> Algorithmic trading, portfolio optimization</li>
+                    <li><strong>Healthcare:</strong> Treatment planning, drug discovery</li>
+                    <li><strong>Energy:</strong> Smart grid management, HVAC optimization</li>
+                    <li><strong>Recommendations:</strong> Netflix, YouTube, Spotify</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple sidebar toggle
+        const menuBtn = document.getElementById('menuBtn');
+        const sidebar = document.getElementById('sidebar');
+
+        menuBtn.addEventListener('click', function() {
+            sidebar.classList.toggle('open');
+            document.body.classList.toggle('sidebar-open');
+        });
+
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+                sidebar.classList.remove('open');
+                document.body.classList.remove('sidebar-open');
+            }
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                sidebar.classList.remove('open');
+                document.body.classList.remove('sidebar-open');
+            }
+        });
+    </script>
+</body>
+</html>
