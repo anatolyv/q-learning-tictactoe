@@ -2,9 +2,9 @@ name: Deploy Q-Learning App
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
@@ -24,48 +24,49 @@ jobs:
 
       - name: Smoke test imports
         run: |
-          python - <<'PY'
+          python - << 'PY'
           import importlib
-          for m in ("tic_tac_toe_env","q_learning_agent","training_system"):
+          for m in ["tic_tac_toe_env", "q_learning_agent", "training_system"]:
               importlib.import_module(m)
           print("✅ imports OK")
           PY
 
- deploy-railway:
-  needs: test
-  runs-on: ubuntu-latest
-  if: github.ref == 'refs/heads/main'
-  steps:
-    - uses: actions/checkout@v4
+  deploy-railway:
+    needs: test
+    runs-on: ubuntu-latest
+    if: "github.ref == 'refs/heads/main'"
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Set up Node (for Railway CLI)
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
+      - name: Set up Node (for Railway CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-    - name: Install Railway CLI
-      run: npm i -g @railway/cli
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
 
-    - name: Login + Link project + Deploy
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-      run: |
-        railway login --token "$RAILWAY_TOKEN"
-        railway link --project "$RAILWAY_PROJECT_ID"
-        # If you have multiple services, set the exact service name:
-        railway up --service "q-learning-tictactoe" --ci --detach
-        # (Optionally: add --environment "production" if you use multiple envs)
+      - name: Login + Link project + Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}          # create in: Settings → Secrets and variables → Actions
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }} # copy from Railway → Project → Settings → Project ID
+          SERVICE_NAME: q-learning-tictactoe                    # change if your service name differs
+        run: |
+          set -e
+          railway login --token "$RAILWAY_TOKEN"
+          railway link --project "$RAILWAY_PROJECT_ID"
+          # if you have multiple services, specify one explicitly:
+          railway up --service "$SERVICE_NAME" --ci --detach
 
   deploy-render:
     needs: test
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    if: "github.ref == 'refs/heads/main' && secrets.RENDER_SERVICE_ID != '' && secrets.RENDER_API_KEY != ''"
     steps:
       - uses: actions/checkout@v4
 
       - name: Deploy to Render
         uses: johnbeynon/render-deploy-action@v0.0.8
         with:
-          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}  # optional: only runs if secrets exist
           api-key: ${{ secrets.RENDER_API_KEY }}
