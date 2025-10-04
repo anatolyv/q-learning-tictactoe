@@ -50,7 +50,7 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --ci --detach
+        run: railway up --service ${{ secrets.RAILWAY_TOKEN }} --ci --detach
 
   deploy-render:
     needs: test
