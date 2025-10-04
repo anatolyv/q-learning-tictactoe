@@ -29,18 +29,25 @@ jobs:
         echo "✅ All modules import successfully"
 
   deploy-railway:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
+  needs: test
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main'
+  steps:
     - uses: actions/checkout@v3
 
-    - name: Deploy to Railway
-      uses: railwayapp/railway-action@v1
+    - name: Set up Node
+      uses: actions/setup-node@v4
       with:
-        railway_token: ${{ secrets.RAILWAY_TOKEN }}
-        service: ${{ secrets.RAILWAY_SERVICE_ID }}
+        node-version: '20'
+
+    - name: Install Railway CLI
+      run: npm i -g @railway/cli
+
+    - name: Deploy to Railway
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      run: |
+        railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --ci --detach
 
   deploy-render:
     needs: test
