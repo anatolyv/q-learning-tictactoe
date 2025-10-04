@@ -61,12 +61,21 @@ jobs:
   deploy-render:
     needs: test
     runs-on: ubuntu-latest
-    if: "github.ref == 'refs/heads/main' && secrets.RENDER_SERVICE_ID != '' && secrets.RENDER_API_KEY != ''"
+    if: ${{ github.ref == 'refs/heads/main' }}
+    env:
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_API_KEY:   ${{ secrets.RENDER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Deploy to Render
+  
+      - name: Deploy to Render (only if secrets exist)
+      # step-level check using the env values populated from secrets
+        if: ${{ env.RENDER_SERVICE_ID != '' && env.RENDER_API_KEY != '' }}
         uses: johnbeynon/render-deploy-action@v0.0.8
         with:
-          service-id: ${{ secrets.RENDER_SERVICE_ID }}  # optional: only runs if secrets exist
-          api-key: ${{ secrets.RENDER_API_KEY }}
+          service-id: ${{ env.RENDER_SERVICE_ID }}
+          api-key:     ${{ env.RENDER_API_KEY }}
+
+      - name: Skip Render deploy (missing secrets)
+        if: ${{ !(env.RENDER_SERVICE_ID != '' && env.RENDER_API_KEY != '') }}
+        run: echo "Render secrets not set; skipping render deploy."
