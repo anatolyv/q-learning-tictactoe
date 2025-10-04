@@ -2,63 +2,65 @@ name: Deploy Q-Learning App
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.11'
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Test basic imports
-      run: |
-        python -c "import tic_tac_toe_env, q_learning_agent, training_system"
-        echo "✅ All modules import successfully"
+      - name: Smoke test imports
+        run: |
+          python - <<'PY'
+          import importlib
+          for m in ("tic_tac_toe_env","q_learning_agent","training_system"):
+              importlib.import_module(m)
+          print("✅ imports OK")
+          PY
 
   deploy-railway:
-  needs: test
-  runs-on: ubuntu-latest
-  if: github.ref == 'refs/heads/main'
-  steps:
-    - uses: actions/checkout@v3
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Set up Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      # CLI route (most reliable)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-    - name: Install Railway CLI
-      run: npm i -g @railway/cli
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
 
-    - name: Deploy to Railway
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      run: |
-        railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --ci --detach
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --ci --detach
 
   deploy-render:
     needs: test
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Deploy to Render
-      uses: johnbeynon/render-deploy-action@v0.0.8
-      with:
-        service-id: ${{ secrets.RENDER_SERVICE_ID }}
-        api-key: ${{ secrets.RENDER_API_KEY }}
+      - name: Deploy to Render
+        uses: johnbeynon/render-deploy-action@v0.0.8
+        with:
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
