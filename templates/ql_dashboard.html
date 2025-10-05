@@ -150,6 +150,32 @@
             color: #fff;
         }
 
+        .btn.danger:disabled {
+            background: #e5e7eb !important;
+            color: #9ca3af !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.continue-btn {
+            background: #059669;
+            color: #fff;
+        }
+
+        .btn.continue-btn:hover {
+            background: #047857;
+            color: #fff;
+        }
+
+        .btn.continue-btn:disabled {
+            background: #e5e7eb;
+            color: #fff !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -567,9 +593,9 @@
             </div>
             <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="start-training" class="btn">Start Training</button>
-                <button id="continue-training" class="btn" style="background: #059669;">Continue Training</button>
+                <button id="continue-training" class="btn continue-btn">Continue Training</button>
                 <button id="stop-training" class="btn danger" disabled>Stop Training</button>
-                <button id="update-params" class="btn">Update Parameters</button>
+                <button id="update-params" class="btn" disabled>Update Parameters</button>
             </div>
         </div>
 
@@ -942,6 +968,7 @@
             document.getElementById('start-training').disabled = true;
             document.getElementById('continue-training').disabled = true;
             document.getElementById('stop-training').disabled = false;
+            document.getElementById('update-params').disabled = false;
 
             // If this is fresh training (starting from 0), clear the chart
             if (startingEpisode === 0) {
@@ -968,6 +995,7 @@
             document.getElementById('start-training').disabled = false;
             document.getElementById('continue-training').disabled = false;
             document.getElementById('stop-training').disabled = true;
+            document.getElementById('update-params').disabled = true;
             addLogEntry(`Training completed in ${data.total_time.toFixed(2)}s`, 'info');
         });
 
@@ -1329,6 +1357,12 @@
 
 
         // Initialize
+        // Ensure buttons start in correct state
+        document.getElementById('start-training').disabled = false;
+        document.getElementById('continue-training').disabled = false;
+        document.getElementById('stop-training').disabled = true;
+        document.getElementById('update-params').disabled = true;
+
         addLogEntry('Dashboard loaded and ready');
     </script>
 
