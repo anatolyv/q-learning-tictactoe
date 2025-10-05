@@ -86,6 +86,32 @@ class QLearningWebUI:
 
             return jsonify({'status': 'success', 'message': 'Training started'})
 
+        @self.app.route('/api/continue_training', methods=['POST'])
+        def continue_training():
+            if self.training_active:
+                return jsonify({'status': 'error', 'message': 'Training already active'})
+
+            # Update parameters from request
+            params = request.json or {}
+            self.training_params.update(params)
+
+            # Find available models to continue from
+            available_models = self.get_available_models()
+            if not available_models:
+                return jsonify({'status': 'error', 'message': 'No trained models found to continue from'})
+
+            # Start continue training in background thread
+            self.training_thread = threading.Thread(target=self.run_continue_training, args=(available_models,))
+            self.training_thread.daemon = True
+            self.training_thread.start()
+
+            return jsonify({'status': 'success', 'message': 'Continue training started', 'loaded_models': available_models})
+
+        @self.app.route('/api/available_models', methods=['GET'])
+        def get_models():
+            models = self.get_available_models()
+            return jsonify({'models': models})
+
         @self.app.route('/api/stop_training', methods=['POST'])
         def stop_training():
             self.training_active = False
@@ -783,6 +809,38 @@ class QLearningWebUI:
                  (state1_counts['1'] == state2_counts['2'] and state1_counts['2'] == state2_counts['1'])))
 
 
+    def get_available_models(self):
+        """Get list of available trained models"""
+        import os
+        import glob
+
+        models = []
+
+        # Look for model files in current directory
+        model_patterns = ['*.pkl', 'model_*.pkl', '*_model_*.pkl', 'final_model_*.pkl']
+
+        for pattern in model_patterns:
+            for filepath in glob.glob(pattern):
+                if os.path.isfile(filepath):
+                    # Get file modification time for sorting
+                    mtime = os.path.getmtime(filepath)
+                    models.append({
+                        'filename': filepath,
+                        'path': os.path.abspath(filepath),
+                        'modified': mtime,
+                        'size': os.path.getsize(filepath)
+                    })
+
+        # Remove duplicates and sort by modification time (newest first)
+        seen = set()
+        unique_models = []
+        for model in sorted(models, key=lambda x: x['modified'], reverse=True):
+            if model['filename'] not in seen:
+                seen.add(model['filename'])
+                unique_models.append(model)
+
+        return unique_models
+
     def run_training(self):
         """Run training with real-time UI updates"""
         self.training_active = True
@@ -805,6 +863,81 @@ class QLearningWebUI:
             epsilon_decay=self.training_params['epsilon_decay'],
             epsilon_min=self.training_params['epsilon_min']
         )
+
+        self._run_training_loop()
+
+    def run_continue_training(self, available_models):
+        """Run continue training with real-time UI updates"""
+        self.training_active = True
+
+        # Load the most recent models
+        best_x_model = None
+        best_o_model = None
+
+        # Look for X and O models specifically
+        for model in available_models:
+            if 'model_x' in model['filename'] or 'final_model_x' in model['filename']:
+                if best_x_model is None or model['modified'] > best_x_model['modified']:
+                    best_x_model = model
+            elif 'model_o' in model['filename'] or 'final_model_o' in model['filename']:
+                if best_o_model is None or model['modified'] > best_o_model['modified']:
+                    best_o_model = model
+
+        # If no specific X/O models found, try to use any available model
+        if not best_x_model and not best_o_model and available_models:
+            best_x_model = available_models[0]  # Use most recent model for both
+            best_o_model = available_models[0]
+
+        # Initialize agents
+        self.agent_x = QLearningAgent(
+            player=Player.X,
+            learning_rate=self.training_params['learning_rate'],
+            discount_factor=self.training_params['discount_factor'],
+            epsilon=self.training_params['epsilon_start'],
+            epsilon_decay=self.training_params['epsilon_decay'],
+            epsilon_min=self.training_params['epsilon_min']
+        )
+
+        self.agent_o = QLearningAgent(
+            player=Player.O,
+            learning_rate=self.training_params['learning_rate'],
+            discount_factor=self.training_params['discount_factor'],
+            epsilon=self.training_params['epsilon_start'],
+            epsilon_decay=self.training_params['epsilon_decay'],
+            epsilon_min=self.training_params['epsilon_min']
+        )
+
+        # Load models if available
+        models_loaded = []
+        if best_x_model:
+            try:
+                self.agent_x.load_model(best_x_model['filename'])
+                models_loaded.append(f"Agent X: {best_x_model['filename']}")
+                print(f"Loaded Agent X model: {best_x_model['filename']} (Q-table size: {len(self.agent_x.q_table)})")
+            except Exception as e:
+                print(f"Failed to load Agent X model: {e}")
+
+        if best_o_model:
+            try:
+                self.agent_o.load_model(best_o_model['filename'])
+                models_loaded.append(f"Agent O: {best_o_model['filename']}")
+                print(f"Loaded Agent O model: {best_o_model['filename']} (Q-table size: {len(self.agent_o.q_table)})")
+            except Exception as e:
+                print(f"Failed to load Agent O model: {e}")
+
+        # Emit status about loaded models
+        self.socketio.emit('models_loaded', {
+            'models': models_loaded,
+            'agent_x_qtable_size': len(self.agent_x.q_table) if self.agent_x else 0,
+            'agent_o_qtable_size': len(self.agent_o.q_table) if self.agent_o else 0,
+            'agent_x_epsilon': self.agent_x.epsilon if self.agent_x else 0,
+            'agent_o_epsilon': self.agent_o.epsilon if self.agent_o else 0
+        })
+
+        self._run_training_loop()
+
+    def _run_training_loop(self):
+        """Common training loop for both fresh and continue training"""
 
         # Emit initial state
         self.socketio.emit('training_started', {'total_episodes': self.training_params['episodes_total']})
@@ -838,6 +971,21 @@ class QLearningWebUI:
 
         # Training completed
         self.training_active = False
+
+        # Save models after training completion
+        try:
+            import time as time_module
+            timestamp = int(time_module.time())
+            x_filename = f"model_x_episode_{self.training_params['episodes_total']}_{timestamp}.pkl"
+            o_filename = f"model_o_episode_{self.training_params['episodes_total']}_{timestamp}.pkl"
+
+            self.agent_x.save_model(x_filename)
+            self.agent_o.save_model(o_filename)
+
+            print(f"Training completed. Models saved: {x_filename}, {o_filename}")
+        except Exception as e:
+            print(f"Failed to save models: {e}")
+
         self.socketio.emit('training_completed', {
             'total_time': time.time() - start_time,
             'final_stats': self.training_stats
