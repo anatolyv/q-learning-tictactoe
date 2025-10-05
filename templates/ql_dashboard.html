@@ -344,16 +344,19 @@
             grid-column: span 1;
         }
 
+
         @media (max-width: 1200px) {
             .dashboard {
                 grid-template-columns: 1fr 1fr;
             }
+
         }
 
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
             }
+
         }
 
         .epsilon-indicator {
@@ -375,6 +378,7 @@
         .epsilon-low {
             background: #4CAF50;
         }
+
 
         /* Simple Educational Sidebar */
         .menu-btn {
@@ -631,6 +635,9 @@
             <div class="chart-container">
                 <canvas id="training-chart"></canvas>
             </div>
+            <div style="margin-top: 8px; font-size: 0.8em; color: #64748b; text-align: center;">
+                Click legend items to show/hide lines. Exploration drops as epsilon decays.
+            </div>
         </div>
 
         <!-- Human vs AI Game -->
@@ -677,6 +684,7 @@
             </div>
         </div>
 
+
         <!-- Move History -->
         <div class="panel">
             <h3>Recent Moves</h3>
@@ -705,7 +713,7 @@
         let trainingActive = false;
         let totalEpisodes = 10000;
 
-        // Chart setup
+        // Chart setup - Training Chart
         const ctx = document.getElementById('training-chart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'line',
@@ -714,32 +722,64 @@
                 datasets: [{
                     label: 'X Win Rate',
                     data: [],
-                    borderColor: '#4CAF50',
-                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
                     tension: 0.4,
-                    yAxisID: 'y'
+                    yAxisID: 'y',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 }, {
                     label: 'O Win Rate',
                     data: [],
-                    borderColor: '#f44336',
-                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                    borderColor: '#dc2626',
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     tension: 0.4,
-                    yAxisID: 'y'
+                    yAxisID: 'y',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 }, {
                     label: 'Draw Rate',
                     data: [],
-                    borderColor: '#ff9800',
-                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     tension: 0.4,
-                    yAxisID: 'y'
+                    yAxisID: 'y',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }, {
+                    label: 'Explore %',
+                    data: [],
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y2',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }, {
+                    label: 'Exploit %',
+                    data: [],
+                    borderColor: '#ea580c',
+                    backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y2',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 }, {
                     label: 'Epsilon',
                     data: [],
-                    borderColor: '#9c27b0',
-                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    borderColor: '#9333ea',
+                    backgroundColor: 'rgba(147, 51, 234, 0.1)',
                     tension: 0.4,
                     yAxisID: 'y1',
-                    borderDash: [5, 5]
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 }]
             },
             options: {
@@ -749,6 +789,18 @@
                     legend: {
                         display: true,
                         position: 'top',
+                        onClick: (evt, legendItem, legend) => {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            const isVisible = ci.isDatasetVisible(index);
+                            if (isVisible) {
+                                ci.hide(index);
+                                legendItem.hidden = true;
+                            } else {
+                                ci.show(index);
+                                legendItem.hidden = false;
+                            }
+                        },
                         labels: {
                             color: '#334155',
                             font: {
@@ -756,9 +808,37 @@
                                 size: 12,
                                 weight: '500'
                             },
-                            padding: 20,
-                            usePointStyle: true,
-                            pointStyle: 'line'
+                            padding: 15,
+                            usePointStyle: false,
+                            boxWidth: 15,
+                            boxHeight: 15,
+                            generateLabels: (chart) => {
+                                const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                const labels = original.call(this, chart);
+                                labels.forEach((label, index) => {
+                                    const dataset = chart.data.datasets[index];
+                                    const isVisible = chart.isDatasetVisible(index);
+
+                                    // Simple color box appearance
+                                    label.pointStyle = 'rect';
+                                    label.usePointStyle = true;
+
+                                    if (isVisible) {
+                                        label.fontColor = '#334155';
+                                        label.strokeStyle = dataset.borderColor;
+                                        label.fillStyle = dataset.borderColor;
+                                        label.lineWidth = 2;
+                                        label.text = dataset.label;
+                                    } else {
+                                        label.fontColor = '#9ca3af';
+                                        label.strokeStyle = '#e5e7eb';
+                                        label.fillStyle = '#f9fafb';
+                                        label.lineWidth = 1;
+                                        label.text = dataset.label;
+                                    }
+                                });
+                                return labels;
+                            }
                         }
                     }
                 },
@@ -823,6 +903,13 @@
                         },
                         min: 0,
                         max: 1
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: false,
+                        position: 'left',
+                        min: 0,
+                        max: 100
                     }
                 }
             }
@@ -854,6 +941,7 @@
         socket.on('training_update', (data) => {
             updateTrainingStats(data);
         });
+
 
         socket.on('training_completed', (data) => {
             trainingActive = false;
@@ -989,7 +1077,9 @@
             chart.data.datasets[0].data.push(data.x_win_rate);
             chart.data.datasets[1].data.push(data.o_win_rate);
             chart.data.datasets[2].data.push(data.draw_rate);
-            chart.data.datasets[3].data.push(data.x_epsilon);
+            chart.data.datasets[3].data.push(data.explore_percentage || 0);
+            chart.data.datasets[4].data.push(data.exploit_percentage || 0);
+            chart.data.datasets[5].data.push(data.x_epsilon);
 
             // Don't remove old data - let it accumulate and scale to fit
             // Chart will automatically scale X-axis to show all data points
@@ -1176,6 +1266,7 @@
             document.getElementById('ai-wins').textContent = humanGameScore.ai;
             document.getElementById('draw-count').textContent = humanGameScore.draws;
         }
+
 
         // Initialize
         addLogEntry('Dashboard loaded and ready');

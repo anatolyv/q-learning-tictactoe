@@ -56,7 +56,9 @@ class QLearningWebUI:
             'training_speed': 0.0,
             'current_game_board': ['', '', '', '', '', '', '', '', ''],
             'last_moves': [],
-            'recent_q_updates': []
+            'recent_q_updates': [],
+            'explore_percentage': 0.0,
+            'exploit_percentage': 0.0
         }
 
         self.setup_routes()
@@ -780,6 +782,7 @@ class QLearningWebUI:
                 ((state1_counts['1'] == state2_counts['1'] and state1_counts['2'] == state2_counts['2']) or
                  (state1_counts['1'] == state2_counts['2'] and state1_counts['2'] == state2_counts['1'])))
 
+
     def run_training(self):
         """Run training with real-time UI updates"""
         self.training_active = True
@@ -850,6 +853,10 @@ class QLearningWebUI:
         move_history = []
         q_updates = []
 
+        # Track exploration vs exploitation for this game
+        explore_count = 0
+        exploit_count = 0
+
         # Track previous move for step-by-step Q-learning
         previous_state = None
         previous_action = None
@@ -895,8 +902,14 @@ class QLearningWebUI:
                         'reward': shaped_reward
                     })
 
-            # Choose action
+            # Choose action and track exploration vs exploitation
+            is_exploration = (np.random.random() < current_agent.epsilon)
             action = current_agent.choose_action(state, available_actions, training=True)
+
+            if is_exploration:
+                explore_count += 1
+            else:
+                exploit_count += 1
 
             # Record move
             move_history.append({
@@ -988,6 +1001,14 @@ class QLearningWebUI:
         self.training_stats['current_game_board'] = self.state_to_board(self.env.get_state_key())
         self.training_stats['last_moves'] = move_history[-9:]  # Last 9 moves
         self.training_stats['recent_q_updates'] = q_updates[-20:]  # Last 20 Q-updates
+
+        # Update exploration vs exploitation stats
+        total_moves = explore_count + exploit_count
+        if total_moves > 0:
+            explore_pct = (explore_count / total_moves) * 100
+            exploit_pct = (exploit_count / total_moves) * 100
+            self.training_stats['explore_percentage'] = explore_pct
+            self.training_stats['exploit_percentage'] = exploit_pct
 
         return info
 
@@ -1138,6 +1159,7 @@ class QLearningWebUI:
             'agent_x': x_sample,
             'agent_o': o_sample
         })
+
 
     def run(self, host='0.0.0.0', port=8082, debug=True):
         """Run the web UI"""
