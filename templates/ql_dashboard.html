@@ -713,6 +713,8 @@
         // Training state
         let trainingActive = false;
         let totalEpisodes = 10000;
+        let startingEpisode = 0;
+        let targetEpisode = 10000;
 
         // Chart setup - Training Chart
         const ctx = document.getElementById('training-chart').getContext('2d');
@@ -935,10 +937,25 @@
         socket.on('training_started', (data) => {
             trainingActive = true;
             totalEpisodes = data.total_episodes;
+            startingEpisode = data.starting_episode || 0;
+            targetEpisode = data.target_episode || data.total_episodes;
             document.getElementById('start-training').disabled = true;
             document.getElementById('continue-training').disabled = true;
             document.getElementById('stop-training').disabled = false;
-            addLogEntry(`Training started: ${totalEpisodes} episodes`, 'info');
+
+            // If this is fresh training (starting from 0), clear the chart
+            if (startingEpisode === 0) {
+                chart.data.labels = [];
+                chart.data.datasets.forEach(dataset => {
+                    dataset.data = [];
+                });
+                chart.update();
+                addLogEntry(`Training started: ${totalEpisodes} episodes`, 'info');
+            } else {
+                // For continue training, keep existing chart data and add info
+                addLogEntry(`Continuing training from episode ${startingEpisode} to ${targetEpisode} (${totalEpisodes} more episodes)`, 'info');
+                console.log(`Continue training: Starting from episode ${startingEpisode}, target ${targetEpisode}`);
+            }
         });
 
         socket.on('training_update', (data) => {
@@ -1061,13 +1078,17 @@
         }
 
         function updateTrainingStats(data) {
+            // Debug logging
+            console.log(`Episode update: ${data.episode} (starting: ${startingEpisode}, total: ${totalEpisodes})`);
+
             // Update progress
             document.getElementById('episode-count').textContent = data.episode;
             document.getElementById('training-speed').textContent = data.training_speed.toFixed(1);
             document.getElementById('total-games').textContent = data.episode;
 
-            const progress = (data.episode / totalEpisodes) * 100;
-            document.getElementById('episode-progress').style.width = progress + '%';
+            // Calculate progress based on the current session and continuation
+            const progress = ((data.episode - startingEpisode) / totalEpisodes) * 100;
+            document.getElementById('episode-progress').style.width = Math.min(100, Math.max(0, progress)) + '%';
 
             // Update agent stats
             document.getElementById('x-wins').textContent = data.x_wins;

@@ -61,6 +61,9 @@ class QLearningWebUI:
             'exploit_percentage': 0.0
         }
 
+        # Episode tracking for continue training
+        self.episodes_completed = 0
+
         self.setup_routes()
 
     def setup_routes(self):
@@ -95,10 +98,18 @@ class QLearningWebUI:
             params = request.json or {}
             self.training_params.update(params)
 
+            # Check if we have agents in memory first
+            if self.agent_x and self.agent_o and self.episodes_completed > 0:
+                # Start continue training with in-memory agents
+                self.training_thread = threading.Thread(target=self.run_continue_training, args=([],))
+                self.training_thread.daemon = True
+                self.training_thread.start()
+                return jsonify({'status': 'success', 'message': 'Continue training started (from memory)', 'source': 'memory'})
+
             # Find available models to continue from
             available_models = self.get_available_models()
             if not available_models:
-                return jsonify({'status': 'error', 'message': 'No trained models found to continue from'})
+                return jsonify({'status': 'error', 'message': 'No trained models found to continue from and no agents in memory'})
 
             # Start continue training in background thread
             self.training_thread = threading.Thread(target=self.run_continue_training, args=(available_models,))
@@ -841,9 +852,25 @@ class QLearningWebUI:
 
         return unique_models
 
+    def _extract_episode_count_from_filename(self, filename):
+        """Extract episode count from model filename"""
+        import re
+
+        # Look for patterns like "episode_1000", "model_x_episode_1000", etc.
+        pattern = r'episode_(\d+)'
+        match = re.search(pattern, filename)
+
+        if match:
+            return int(match.group(1))
+
+        return 0
+
     def run_training(self):
         """Run training with real-time UI updates"""
         self.training_active = True
+
+        # Reset episode counter for fresh training
+        self.episodes_completed = 0
 
         # Initialize agents with current parameters
         self.agent_x = QLearningAgent(
@@ -870,22 +897,45 @@ class QLearningWebUI:
         """Run continue training with real-time UI updates"""
         self.training_active = True
 
-        # Load the most recent models
+        # Check if we have agents already in memory from previous training
+        if self.agent_x and self.agent_o and self.episodes_completed > 0:
+            # Continue with existing agents in memory
+            print(f"Continuing training from episode {self.episodes_completed} (agents in memory)", flush=True)
+
+            # Emit status about in-memory agents
+            self.socketio.emit('models_loaded', {
+                'models': [f"Agent X: In-memory (Q-table: {len(self.agent_x.q_table)} states)",
+                          f"Agent O: In-memory (Q-table: {len(self.agent_o.q_table)} states)"],
+                'agent_x_qtable_size': len(self.agent_x.q_table),
+                'agent_o_qtable_size': len(self.agent_o.q_table),
+                'agent_x_epsilon': self.agent_x.epsilon,
+                'agent_o_epsilon': self.agent_o.epsilon,
+                'source': 'memory'
+            })
+
+            self._run_training_loop()
+            return
+
+        # Fallback: Load from .pkl files if no agents in memory
+        if not available_models:
+            # No models available, start fresh
+            print("No models available and no agents in memory. Starting fresh training.", flush=True)
+            return self.run_training()
+
+        # Load the most recent models (existing .pkl logic for backwards compatibility)
         best_x_model = None
         best_o_model = None
 
-        # Look for X and O models specifically
         for model in available_models:
-            if 'model_x' in model['filename'] or 'final_model_x' in model['filename']:
+            if 'model_x' in model['filename']:
                 if best_x_model is None or model['modified'] > best_x_model['modified']:
                     best_x_model = model
-            elif 'model_o' in model['filename'] or 'final_model_o' in model['filename']:
+            elif 'model_o' in model['filename']:
                 if best_o_model is None or model['modified'] > best_o_model['modified']:
                     best_o_model = model
 
-        # If no specific X/O models found, try to use any available model
         if not best_x_model and not best_o_model and available_models:
-            best_x_model = available_models[0]  # Use most recent model for both
+            best_x_model = available_models[0]
             best_o_model = available_models[0]
 
         # Initialize agents
@@ -907,13 +957,18 @@ class QLearningWebUI:
             epsilon_min=self.training_params['epsilon_min']
         )
 
-        # Load models if available
+        # Load models if available and extract episode count
         models_loaded = []
+        max_episodes = 0
+
         if best_x_model:
             try:
                 self.agent_x.load_model(best_x_model['filename'])
                 models_loaded.append(f"Agent X: {best_x_model['filename']}")
                 print(f"Loaded Agent X model: {best_x_model['filename']} (Q-table size: {len(self.agent_x.q_table)})")
+                episode_count = self._extract_episode_count_from_filename(best_x_model['filename'])
+                if episode_count > max_episodes:
+                    max_episodes = episode_count
             except Exception as e:
                 print(f"Failed to load Agent X model: {e}")
 
@@ -922,8 +977,14 @@ class QLearningWebUI:
                 self.agent_o.load_model(best_o_model['filename'])
                 models_loaded.append(f"Agent O: {best_o_model['filename']}")
                 print(f"Loaded Agent O model: {best_o_model['filename']} (Q-table size: {len(self.agent_o.q_table)})")
+                episode_count = self._extract_episode_count_from_filename(best_o_model['filename'])
+                if episode_count > max_episodes:
+                    max_episodes = episode_count
             except Exception as e:
                 print(f"Failed to load Agent O model: {e}")
+
+        self.episodes_completed = max_episodes
+        print(f"Continuing training from episode {self.episodes_completed} (loaded from files)", flush=True)
 
         # Emit status about loaded models
         self.socketio.emit('models_loaded', {
@@ -931,7 +992,8 @@ class QLearningWebUI:
             'agent_x_qtable_size': len(self.agent_x.q_table) if self.agent_x else 0,
             'agent_o_qtable_size': len(self.agent_o.q_table) if self.agent_o else 0,
             'agent_x_epsilon': self.agent_x.epsilon if self.agent_x else 0,
-            'agent_o_epsilon': self.agent_o.epsilon if self.agent_o else 0
+            'agent_o_epsilon': self.agent_o.epsilon if self.agent_o else 0,
+            'source': 'files'
         })
 
         self._run_training_loop()
@@ -939,8 +1001,15 @@ class QLearningWebUI:
     def _run_training_loop(self):
         """Common training loop for both fresh and continue training"""
 
+        # Calculate total episodes including continuation
+        total_episodes = self.episodes_completed + self.training_params['episodes_total']
+
         # Emit initial state
-        self.socketio.emit('training_started', {'total_episodes': self.training_params['episodes_total']})
+        self.socketio.emit('training_started', {
+            'total_episodes': self.training_params['episodes_total'],
+            'starting_episode': self.episodes_completed,
+            'target_episode': total_episodes
+        })
 
         start_time = time.time()
         last_update_time = start_time
@@ -949,8 +1018,11 @@ class QLearningWebUI:
             if not self.training_active:
                 break
 
+            # Calculate cumulative episode number
+            cumulative_episode = self.episodes_completed + episode
+
             # Play one game with detailed tracking
-            game_result = self.play_game_with_tracking(episode)
+            game_result = self.play_game_with_tracking(cumulative_episode)
 
             # Update epsilon
             self.agent_x.update_epsilon()
@@ -961,7 +1033,7 @@ class QLearningWebUI:
                 current_time = time.time()
                 episodes_per_second = self.training_params['update_interval'] / (current_time - last_update_time)
 
-                self.update_training_stats(episode, episodes_per_second)
+                self.update_training_stats(cumulative_episode, episodes_per_second)
                 self.socketio.emit('training_update', self.training_stats)
 
                 # Send sample Q-values for debugging
@@ -972,19 +1044,12 @@ class QLearningWebUI:
         # Training completed
         self.training_active = False
 
-        # Save models after training completion
-        try:
-            import time as time_module
-            timestamp = int(time_module.time())
-            x_filename = f"model_x_episode_{self.training_params['episodes_total']}_{timestamp}.pkl"
-            o_filename = f"model_o_episode_{self.training_params['episodes_total']}_{timestamp}.pkl"
+        # Update episodes completed counter
+        self.episodes_completed = total_episodes
 
-            self.agent_x.save_model(x_filename)
-            self.agent_o.save_model(o_filename)
-
-            print(f"Training completed. Models saved: {x_filename}, {o_filename}")
-        except Exception as e:
-            print(f"Failed to save models: {e}")
+        # Save models after training completion (disabled to avoid .pkl files)
+        # Note: Models remain in memory for continued training within the same session
+        print(f"Training completed. Models kept in memory (episode {total_episodes}).")
 
         self.socketio.emit('training_completed', {
             'total_time': time.time() - start_time,
@@ -1258,7 +1323,7 @@ class QLearningWebUI:
         total_games = x_stats['games_played']
 
         self.training_stats.update({
-            'episode': episode + 1,
+            'episode': episode + 1,  # episode is already cumulative
             'x_wins': x_stats['wins'],
             'o_wins': o_stats['wins'],
             'draws': x_stats['draws'],
