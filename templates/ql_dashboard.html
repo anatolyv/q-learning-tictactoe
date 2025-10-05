@@ -716,19 +716,30 @@
                     data: [],
                     borderColor: '#4CAF50',
                     backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    yAxisID: 'y'
                 }, {
                     label: 'O Win Rate',
                     data: [],
                     borderColor: '#f44336',
                     backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    yAxisID: 'y'
                 }, {
                     label: 'Draw Rate',
                     data: [],
                     borderColor: '#ff9800',
                     backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    yAxisID: 'y'
+                }, {
+                    label: 'Epsilon',
+                    data: [],
+                    borderColor: '#9c27b0',
+                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y1',
+                    borderDash: [5, 5]
                 }]
             },
             options: {
@@ -770,6 +781,9 @@
                         }
                     },
                     y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
                         title: {
                             display: true,
                             text: 'Win Rate',
@@ -784,6 +798,28 @@
                         },
                         grid: {
                             color: '#e2e8f0'
+                        },
+                        min: 0,
+                        max: 1
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Epsilon (Exploration Rate)',
+                            color: '#9c27b0',
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        },
+                        ticks: {
+                            color: '#9c27b0'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
                         },
                         min: 0,
                         max: 1
@@ -953,6 +989,7 @@
             chart.data.datasets[0].data.push(data.x_win_rate);
             chart.data.datasets[1].data.push(data.o_win_rate);
             chart.data.datasets[2].data.push(data.draw_rate);
+            chart.data.datasets[3].data.push(data.x_epsilon);
 
             // Don't remove old data - let it accumulate and scale to fit
             // Chart will automatically scale X-axis to show all data points
